@@ -1,0 +1,12 @@
+{
+  "name": "family-recipes",
+  "version": "2.0.0",
+  "description": "Family Recipes - static, self-hosted recipe site. Recipes are managed as files in data/recipes/; the site is view + search only.",
+  "private": true,
+  "scripts": {
+    "build": "node build.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
