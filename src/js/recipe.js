@@ -54,10 +54,6 @@
         </div>
 
         ${notesHtml}
-
-        <p class="locked-note">
-          This card is filed permanently. To change or remove it, edit the recipe's file directly on the server.
-        </p>
       </article>
     `;
   }
@@ -73,31 +69,23 @@
   function renderLoadError() {
     container.innerHTML = `
       <div class="state-message">
-        <div class="state-title">Couldn't load this recipe</div>
-        <p>Check that the server is running and try refreshing the page.</p>
+        <div class="state-title">Couldn't load recipes</div>
+        <p>Try refreshing the page.</p>
       </div>`;
   }
 
-  async function load() {
+  (async function load() {
     const params = new URLSearchParams(window.location.search);
     const id = params.get("id");
     if (!id) return renderNotFound();
 
     try {
-      const res = await fetch(`/api/recipes/${encodeURIComponent(id)}`);
-      const contentType = res.headers.get("content-type") || "";
-
-      if (res.status === 404) return renderNotFound();
-      if (!res.ok || !contentType.includes("application/json")) {
-        return renderLoadError();
-      }
-
-      const recipe = await res.json();
+      const recipes = await window.RecipeData.loadRecipes();
+      const recipe = recipes.find((r) => r.id === id);
+      if (!recipe) return renderNotFound();
       renderRecipe(recipe);
     } catch (err) {
       renderLoadError();
     }
-  }
-
-  load();
+  })();
 })();
