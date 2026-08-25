@@ -23,7 +23,7 @@
   }
 
   function renderRecipe(recipe) {
-    document.title = `${recipe.name} — Recipe Box`;
+    document.title = `${recipe.name} — Family Recipes`;
 
     const photoHtml = recipe.photo
       ? `<img class="photo" src="/photos/${encodeURIComponent(recipe.photo)}" alt="${escapeHtml(recipe.name)}" />`
@@ -70,6 +70,14 @@
       </div>`;
   }
 
+  function renderLoadError() {
+    container.innerHTML = `
+      <div class="state-message">
+        <div class="state-title">Couldn't load this recipe</div>
+        <p>Check that the server is running and try refreshing the page.</p>
+      </div>`;
+  }
+
   async function load() {
     const params = new URLSearchParams(window.location.search);
     const id = params.get("id");
@@ -77,15 +85,17 @@
 
     try {
       const res = await fetch(`/api/recipes/${encodeURIComponent(id)}`);
-      if (!res.ok) return renderNotFound();
+      const contentType = res.headers.get("content-type") || "";
+
+      if (res.status === 404) return renderNotFound();
+      if (!res.ok || !contentType.includes("application/json")) {
+        return renderLoadError();
+      }
+
       const recipe = await res.json();
       renderRecipe(recipe);
     } catch (err) {
-      container.innerHTML = `
-        <div class="state-message">
-          <div class="state-title">Couldn't load this recipe</div>
-          <p>Check that the server is running and try refreshing the page.</p>
-        </div>`;
+      renderLoadError();
     }
   }
 

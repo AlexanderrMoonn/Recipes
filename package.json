@@ -1,7 +1,7 @@
 {
-  "name": "recipe-box",
-  "version": "1.0.0",
-  "description": "Self-hosted recipe box - add and search your own recipes, no login required.",
+  "name": "family-recipes",
+  "version": "1.0.1",
+  "description": "Self-hosted family recipe site - add and search recipes, no login required.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

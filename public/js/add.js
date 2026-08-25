@@ -17,6 +17,9 @@
       photoPreviewImg.src = e.target.result;
       photoPreview.style.display = "block";
     };
+    reader.onerror = () => {
+      photoPreview.style.display = "none";
+    };
     reader.readAsDataURL(file);
   });
 
@@ -44,10 +47,26 @@
         method: "POST",
         body: formData,
       });
-      const data = await res.json();
+
+      // The server always replies with JSON (success or error) — but if
+      // something in front of it (a proxy, an ad blocker extension, a
+      // dropped connection) returns something else, don't let a failed
+      // res.json() call show a confusing low-level error.
+      const contentType = res.headers.get("content-type") || "";
+      let data = null;
+      if (contentType.includes("application/json")) {
+        try {
+          data = await res.json();
+        } catch {
+          data = null;
+        }
+      }
 
       if (!res.ok) {
-        throw new Error(data.error || "Could not save that recipe.");
+        throw new Error((data && data.error) || `Could not save that recipe (server said: ${res.status}).`);
+      }
+      if (!data) {
+        throw new Error("The server gave an unexpected response. Please try again.");
       }
 
       status.textContent = "Recipe filed! Taking you to it now…";
@@ -57,7 +76,7 @@
         window.location.href = `/recipe.html?id=${encodeURIComponent(data.id)}`;
       }, 600);
     } catch (err) {
-      status.textContent = err.message || "Something went wrong. Please try again.";
+      status.textContent = (err && err.message) || "Something went wrong. Please try again.";
       status.className = "form-status error";
       submitBtn.disabled = false;
       submitBtn.textContent = "File this recipe";

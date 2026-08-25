@@ -76,7 +76,10 @@
     try {
       const url = "/api/recipes" + (query ? `?q=${encodeURIComponent(query)}` : "");
       const res = await fetch(url);
-      if (!res.ok) throw new Error("Request failed");
+      const contentType = res.headers.get("content-type") || "";
+      if (!res.ok || !contentType.includes("application/json")) {
+        throw new Error("Unexpected response from server");
+      }
       const recipes = await res.json();
 
       if (!recipes.length) {

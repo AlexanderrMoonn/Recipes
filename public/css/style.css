@@ -1,5 +1,5 @@
 /* ===========================================================
-   Recipe Box — design tokens
+   Family Recipes — design tokens
    Concept: a card catalog of index cards, the way a family
    recipe box actually looks — not a generic "food blog" page.
    =========================================================== */
@@ -536,6 +536,17 @@ textarea:focus-visible {
   font-size: 0.72rem;
   color: var(--ink-soft);
   letter-spacing: 0.04em;
+}
+
+.site-footer a.last-recipe-link {
+  color: var(--pine-dark);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--pine-dark);
+}
+
+.site-footer a.last-recipe-link:hover {
+  color: var(--brick-dark);
+  border-bottom-color: var(--brick-dark);
 }
 
 @media (max-width: 480px) {

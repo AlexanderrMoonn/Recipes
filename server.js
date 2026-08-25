@@ -1,4 +1,4 @@
-// Recipe Box server
+// Family Recipes server
 // A tiny, dependency-light Express app.
 //
 // Storage model (by design, per the project spec):
@@ -49,6 +49,8 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     if (!file) return cb(null, true);
     if (ALLOWED_IMAGE_TYPES.has(file.mimetype)) return cb(null, true);
+    // Reject cleanly without throwing, so multer surfaces this as a
+    // normal validation failure rather than a stream error.
     cb(new Error("Photo must be a JPEG, PNG, WEBP, or GIF image."));
   },
 });
@@ -61,10 +63,17 @@ const EXT_BY_MIME = {
 };
 
 // ---------- helpers ----------
+
+// Strip anything outside plain ASCII letters/numbers before slugifying.
+// This is the piece that was too loose before: names with curly quotes,
+// accented letters, or other non-ASCII characters (common when text is
+// pasted in from elsewhere, or typed on a phone keyboard) could produce
+// slugs multer/Node's file APIs didn't like. Normalizing first fixes that.
 function slugify(text) {
   return String(text)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "") // strip accents
     .toLowerCase()
-    .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "")
     .slice(0, 60);
@@ -121,6 +130,19 @@ function matchesQuery(recipe, q) {
     .every((term) => haystack.includes(term));
 }
 
+// Safe, race-free id/filename generation: if a collision somehow happens
+// (astronomically unlikely with the random suffix, but cheap to guard),
+// try again with a fresh suffix instead of overwriting an existing recipe.
+function reserveId(name) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const id = makeId(name);
+    const jsonPath = path.join(RECIPES_DIR, `${id}.json`);
+    if (!fs.existsSync(jsonPath)) return id;
+  }
+  // Fall back to a fully random id if we somehow kept colliding.
+  return crypto.randomUUID();
+}
+
 // ---------- API ----------
 
 // List / search recipes
@@ -145,7 +167,21 @@ app.get("/api/recipes/:id", (req, res) => {
 });
 
 // Create a new recipe (no auth, but no update/delete route exists on purpose)
-app.post("/api/recipes", upload.single("photo"), (req, res) => {
+app.post("/api/recipes", (req, res, next) => {
+  upload.single("photo")(req, res, (err) => {
+    if (err) {
+      // Multer/validation errors land here as a normal, readable message
+      // instead of crashing the request or falling through to a generic
+      // error page.
+      const message =
+        err.code === "LIMIT_FILE_SIZE"
+          ? "That photo is too large (8MB max)."
+          : err.message || "Could not process the uploaded photo.";
+      return res.status(400).json({ error: message });
+    }
+    next();
+  });
+}, (req, res) => {
   try {
     const name = (req.body.name || "").trim();
     const ingredients = (req.body.ingredients || "").trim();
@@ -158,11 +194,14 @@ app.post("/api/recipes", upload.single("photo"), (req, res) => {
       });
     }
 
-    const id = makeId(name);
+    const id = reserveId(name);
     let photoFilename = null;
 
     if (req.file) {
       const ext = EXT_BY_MIME[req.file.mimetype] || "";
+      // The filename is always derived from our own generated id, never
+      // from the original uploaded filename, so odd characters or emoji
+      // in a phone's camera-roll filename can never reach the filesystem.
       photoFilename = `${id}${ext}`;
       fs.writeFileSync(path.join(PHOTOS_DIR, photoFilename), req.file.buffer);
     }
@@ -186,20 +225,26 @@ app.post("/api/recipes", upload.single("photo"), (req, res) => {
     res.status(201).json(recipe);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Could not save that recipe." });
+    res.status(500).json({ error: "Could not save that recipe. Please try again." });
   }
 });
 
-// Multer / generic error handler
+// Unknown API routes -> clean JSON 404 instead of an HTML error page
+// (an HTML response here is what previously made the frontend's
+// res.json() call blow up with a cryptic parsing error).
+app.use("/api", (req, res) => {
+  res.status(404).json({ error: "Not found." });
+});
+
+// Generic error handler, always returns JSON
 app.use((err, req, res, next) => {
-  if (err) {
-    return res.status(400).json({ error: err.message || "Something went wrong." });
-  }
-  next();
+  console.error(err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: err.message || "Something went wrong." });
 });
 
 app.listen(PORT, () => {
-  console.log(`Recipe Box listening on http://localhost:${PORT}`);
+  console.log(`Family Recipes listening on http://localhost:${PORT}`);
   console.log(`Recipes stored in: ${RECIPES_DIR}`);
   console.log(`Photos stored in:  ${PHOTOS_DIR}`);
 });
